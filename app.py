@@ -1,8 +1,9 @@
 import streamlit as st
 from pdfminer.high_level import extract_text
 import re
-import anthropic  # New: The official Claude AI library
+import anthropic
 
+# 1. Local Database Setup for Quick Matching
 SKILLS_DB = [
     "Java", "Python", "SQL", "React", "Spring Boot", "HTML", "CSS", 
     "JavaScript", "C++", "C", "Data Structures", "Arduino", "IoT",
@@ -18,7 +19,7 @@ def extract_skills_simple(text):
             found_skills.append(skill)
     return list(set(found_skills))
 
-# New: LLM Logic to call Claude
+# 2. Live LLM Integration Function
 def analyze_with_claude(resume_text, job_description, api_key):
     try:
         client = anthropic.Anthropic(api_key=api_key)
@@ -26,8 +27,7 @@ def analyze_with_claude(resume_text, job_description, api_key):
         system_instruction = (
             "You are an expert Technical Recruitment Specialist and AI Talent Agent. "
             "Analyze the provided resume text against the Job Description. Do not simply look for keyword matches; "
-            "evaluate the underlying technical complexity, project scope, and engineering competencies. "
-            "Be critical, precise, and highly constructive."
+            "evaluate the underlying technical complexity, project scope, and engineering competencies."
         )
         
         user_prompt = f"""
@@ -39,11 +39,7 @@ def analyze_with_claude(resume_text, job_description, api_key):
         ### CANDIDATE RESUME TEXT:
         {resume_text}
         
-        Provide your response in clean markdown with the following specific sections:
-        1. 🎯 **Semantic Match Assessment** (How well do their projects and skills conceptually align?)
-        2. ⚠️ **Critical Tech Stack Gaps** (What mandatory frameworks or tools are completely missing?)
-        3. 💡 **Actionable Optimization Steps** (Provide 3 specific bullet points to improve this resume for this exact role.)
-        4. 📈 **AI Alignment Score** (Provide a concise structural justification and a final percentage fit from 0% to 100%.)
+        Provide your response in clean markdown with semantic matching, critical gaps, and optimizations.
         """
         
         message = client.messages.create(
@@ -53,23 +49,27 @@ def analyze_with_claude(resume_text, job_description, api_key):
             system=system_instruction,
             messages=[{"role": "user", "content": user_prompt}]
         )
-        # Extract the text content from the response object
         return message.content[0].text
     except Exception as e:
         return f"⚠️ API Error: {str(e)}"
 
-# Streamlit Page Setup
+# 3. Streamlit Page Configuration
 st.set_page_config(page_title="Agentic AI Resume Analyzer", page_icon="🚀", layout="wide")
 
 st.title("Agentic AI Resume Analyzer & Matcher 🚀")
 st.markdown("Automated semantic profile evaluation powered by Claude AI.")
 st.markdown("---")
 
-# Sidebar for secure API configuration
+# Sidebar settings with the Free Demo Mode switch
 st.sidebar.header("⚙️ Configuration")
-api_key_input = st.sidebar.text_input("Enter Anthropic API Key", type="password", help="Your key is processed locally and never stored.")
+demo_mode = st.sidebar.checkbox("Enable Demo Mode (No Key Needed)", value=False)
 
-# Main Application Form UI Split
+if not demo_mode:
+    api_key_input = st.sidebar.text_input("Enter Anthropic API Key", type="password")
+else:
+    api_key_input = "demo-active"
+
+# Layout split for input variables
 col_left, col_right = st.columns(2)
 
 with col_left:
@@ -82,24 +82,23 @@ with col_right:
 
 st.markdown("---")
 
-# Processing Flow
+# Processing and Execution Lifecycle
 if uploaded_file is not None and target_jd:
     if st.button("Run Deep AI Screening Analysis", type="primary"):
-        if not api_key_input:
-            st.warning("Please provide an Anthropic API Key in the sidebar to run the LLM analysis.")
+        if not demo_mode and not api_key_input:
+            st.warning("Please provide an Anthropic API Key or enable Demo Mode in the sidebar.")
         else:
-            with st.spinner('Parsing document and orchestrating Claude Engine...'):
-                # 1. Parsing Layer
+            with st.spinner('Parsing document and orchestrating Engine...'):
+                # Document Extraction Layer
                 text = extract_text(uploaded_file)
                 
-                # 2. Local Regular Expression Extractions
+                # Regex Extraction Layer
                 email_match = re.search(r'\S+@\S+', text)
                 phone_match = re.search(r'\b\d{10}\b', text)
                 email = email_match.group() if email_match else "Not Found"
                 phone = phone_match.group() if phone_match else "Not Found"
                 local_skills = extract_skills_simple(text)
                 
-                # Display structural information extracted locally
                 st.success("Document Parsing Complete!")
                 
                 c1, c2 = st.columns(2)
@@ -109,11 +108,25 @@ if uploaded_file is not None and target_jd:
                     st.info(f"**Core DB Skills Found:** {', '.join(local_skills) if local_skills else 'None'}")
                 
                 st.markdown("### 🧠 Claude AI Deep Semantic Analysis")
-                # 3. LLM Orchestration Layer
-                ai_analysis_result = analyze_with_claude(text, target_jd, api_key_input)
                 
-                # Render the markdown report beautifully directly on screen
-                st.markdown(ai_analysis_result)
-                st.balloons()
+                # Render logic branching based on sidebar state
+                if demo_mode:
+                    st.markdown("""
+                    🎯 **Semantic Match Assessment** The candidate profile exhibits strong core capabilities in backend architectures and automated data processing pipelines. Project implementations match 85% of structural expectations.
+                    
+                    ⚠️ **Critical Tech Stack Gaps** * Lack of explicit production monitoring configurations.
+                    * Abstract definitions in data orchestration layers.
+                    
+                    💡 **Actionable Optimization Steps** 1. **Quantify Metrics:** Convert project statements into numeric successes (e.g., 'Optimized text processing latency by 30%').
+                    2. **Highlight API Design:** Explicitly call out security architectures used during microservice connections.
+                    3. **Refine Context Windows:** Frame parsing library use cases around computational footprint control.
+                    
+                    📈 **AI Alignment Score** **88% Alignment** — Profile structurally matches target criteria with minor optimizations required in architectural descriptions.
+                    """)
+                    st.balloons()
+                else:
+                    ai_analysis_result = analyze_with_claude(text, target_jd, api_key_input)
+                    st.markdown(ai_analysis_result)
+                    st.balloons()
 else:
     st.info("Please paste a target Job Description and upload a resume PDF to trigger the intelligent recruitment analysis.")
